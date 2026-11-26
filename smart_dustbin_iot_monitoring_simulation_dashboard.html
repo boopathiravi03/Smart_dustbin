@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Dustbin — IoT Monitoring &amp; Simulation Dashboard</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased">
+  <div class="max-w-5xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800 pb-5">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold text-lg">SD</span>
+          <h1 class="text-2xl font-bold tracking-tight text-white">Smart Dustbin IoT Dashboard</h1>
+        </div>
+        <p class="text-sm text-slate-400 mt-1">Touchless lid automation, ultrasonic fill-level sensing, and overflow prevention.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="connectionBadge" class="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-medium text-emerald-300">
+          <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Telemetry Active
+        </span>
+      </div>
+    </header>
+
+    <!-- Overflow Alert Banner -->
+    <div id="overflowBanner" class="hidden rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-rose-200 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex h-3 w-3 rounded-full bg-rose-500 animate-ping"></span>
+        <div>
+          <p class="font-semibold text-sm text-rose-100">Overflow Alert: Bin Capacity Critical (&ge; 85%)</p>
+          <p class="text-xs text-rose-300">Schedule collection or empty the bin to prevent waste overflow.</p>
+        </div>
+      </div>
+      <button id="bannerEmptyBtn" class="shrink-0 rounded-lg bg-rose-600 hover:bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white transition">
+        Empty Now
+      </button>
+    </div>
+
+    <!-- Top KPI Cards -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Fill Level</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="fillPercentValue" class="text-3xl font-bold text-white">25%</span>
+          <span id="fillStatusText" class="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">Normal</span>
+        </div>
+        <div class="mt-3 h-2.5 w-full rounded-full bg-slate-800 overflow-hidden">
+          <div id="fillBar" class="h-full rounded-full bg-emerald-500 transition-all duration-300" style="width: 25%"></div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Lid Mechanism</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="lidStatusValue" class="text-3xl font-bold text-white">Closed</span>
+          <span id="lidAngleText" class="text-xs font-mono text-slate-400">0&deg;</span>
+        </div>
+        <p id="lidSubtext" class="mt-3 text-xs text-slate-400">Servo idle &mdash; waiting for proximity trigger</p>
+      </div>
+
+      <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Touchless Openings</p>
+        <div class="mt-2 flex items-baseline justify-between">
+          <span id="openingsCount" class="text-3xl font-bold text-white">0</span>
+          <span class="text-xs text-emerald-400 font-medium">Zero-contact</span>
+        </div>
+        <p class="mt-3 text-xs text-slate-400">Hygiene-first ultrasonic lid activations</p>
+      </div>
+
+      <div class="rounded-2xl bg-slate-900 border border-slate-800 p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Alert LED</p>
+        <div class="mt-2 flex items-center gap-2.5">
+          <span id="ledIndicator" class="h-4 w-4 rounded-full bg-slate-700 border border-slate-600"></span>
+          <span id="ledStatusText" class="text-2xl font-bold text-slate-300">OFF</span>
+        </div>
+        <p class="mt-3 text-xs text-slate-400">Activates automatically at &ge; 85% fill</p>
+      </div>
+    </section>
+
+    <!-- Main Interactive Workspace -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Visual Bin + Controls -->
+      <div class="lg:col-span-5 rounded-2xl bg-slate-900 border border-slate-800 p-5 flex flex-col justify-between space-y-5">
+        <div>
+          <h2 class="text-base font-semibold text-white">Hardware Twin &amp; Controls</h2>
+          <p class="text-xs text-slate-400 mt-0.5">Simulate ultrasonic sensors and servo actuator behavior.</p>
+        </div>
+
+        <!-- Visual Bin Representation -->
+        <div class="flex flex-col items-center py-4">
+          <div id="binLidVisual" class="w-44 h-4 rounded-t-lg bg-slate-600 border border-slate-500 transition-transform duration-300 origin-left"></div>
+          <div class="relative w-40 h-48 rounded-b-2xl border-2 border-slate-700 bg-slate-950 overflow-hidden mt-1 flex items-end">
+            <div id="binWasteVisual" class="w-full bg-emerald-500/70 transition-all duration-500" style="height: 25%"></div>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span id="binInnerLabel" class="text-sm font-bold text-white drop-shadow">25% Full</span>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-slate-400 font-mono">Bin Height: 40 cm &bull; Threshold: 85%</p>
+        </div>
+
+        <!-- Simulation Buttons -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <button id="handBtn" class="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2.5 text-sm font-semibold text-white transition">
+            Simulate Hand (&le; 25 cm)
+          </button>
+          <button id="addWasteBtn" class="rounded-xl bg-sky-600 hover:bg-sky-500 px-3.5 py-2.5 text-sm font-semibold text-white transition">
+            Add Waste (+15%)
+          </button>
+          <button id="emptyBinBtn" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-2.5 text-sm font-semibold text-slate-200 transition">
+            Empty Bin (0%)
+          </button>
+          <button id="autoModeBtn" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-2.5 text-sm font-semibold text-slate-200 transition">
+            Auto Telemetry: ON
+          </button>
+        </div>
+      </div>
+
+      <!-- Serial JSON Telemetry Feed -->
+      <div class="lg:col-span-7 rounded-2xl bg-slate-900 border border-slate-800 p-5 flex flex-col">
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 class="text-base font-semibold text-white">Live Serial JSON Telemetry</h2>
+            <p class="text-xs text-slate-400">Matches <code class="text-emerald-400">smart_dustbin.ino</code> 115200 baud output.</p>
+          </div>
+          <button id="clearLogBtn" class="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300 transition">
+            Clear Log
+          </button>
+        </div>
+        <div id="telemetryLog" class="flex-1 min-h-[260px] max-h-[340px] overflow-y-auto rounded-xl bg-slate-950 border border-slate-800 p-3 font-mono text-xs space-y-1.5 text-slate-300"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      fillPercent: 25,
+      lidOpen: false,
+      touchlessOpenings: 0,
+      autoTelemetry: true,
+      lidTimer: null,
+      telemetryTimer: null
+    };
+
+    const els = {
+      fillPercentValue: document.getElementById('fillPercentValue'),
+      fillStatusText: document.getElementById('fillStatusText'),
+      fillBar: document.getElementById('fillBar'),
+      lidStatusValue: document.getElementById('lidStatusValue'),
+      lidAngleText: document.getElementById('lidAngleText'),
+      lidSubtext: document.getElementById('lidSubtext'),
+      openingsCount: document.getElementById('openingsCount'),
+      ledIndicator: document.getElementById('ledIndicator'),
+      ledStatusText: document.getElementById('ledStatusText'),
+      overflowBanner: document.getElementById('overflowBanner'),
+      binLidVisual: document.getElementById('binLidVisual'),
+      binWasteVisual: document.getElementById('binWasteVisual'),
+      binInnerLabel: document.getElementById('binInnerLabel'),
+      telemetryLog: document.getElementById('telemetryLog'),
+      handBtn: document.getElementById('handBtn'),
+      addWasteBtn: document.getElementById('addWasteBtn'),
+      emptyBinBtn: document.getElementById('emptyBinBtn'),
+      bannerEmptyBtn: document.getElementById('bannerEmptyBtn'),
+      autoModeBtn: document.getElementById('autoModeBtn'),
+      clearLogBtn: document.getElementById('clearLogBtn')
+    };
+
+    function render() {
+      const overflow = state.fillPercent >= 85;
+      const warning = state.fillPercent >= 65 && !overflow;
+
+      els.fillPercentValue.textContent = state.fillPercent + '%';
+      els.fillBar.style.width = state.fillPercent + '%';
+      els.binWasteVisual.style.height = state.fillPercent + '%';
+      els.binInnerLabel.textContent = state.fillPercent + '% Full';
+
+      // Color coding
+      els.fillBar.className = 'h-full rounded-full transition-all duration-300 ' +
+        (overflow ? 'bg-rose-500' : warning ? 'bg-amber-500' : 'bg-emerald-500');
+      els.binWasteVisual.className = 'w-full transition-all duration-500 ' +
+        (overflow ? 'bg-rose-500/80' : warning ? 'bg-amber-500/75' : 'bg-emerald-500/70');
+
+      if (overflow) {
+        els.fillStatusText.textContent = 'Overflow Risk';
+        els.fillStatusText.className = 'text-xs font-medium px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300';
+      } else if (warning) {
+        els.fillStatusText.textContent = 'Filling Up';
+        els.fillStatusText.className = 'text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300';
+      } else {
+        els.fillStatusText.textContent = 'Normal';
+        els.fillStatusText.className = 'text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300';
+      }
+
+      // Lid state
+      els.lidStatusValue.textContent = state.lidOpen ? 'Open' : 'Closed';
+      els.lidAngleText.textContent = state.lidOpen ? '90°' : '0°';
+      els.lidSubtext.textContent = state.lidOpen
+        ? 'Touchless trigger active — auto-closing in 3s'
+        : 'Servo idle — waiting for proximity trigger';
+      els.binLidVisual.style.transform = state.lidOpen ? 'rotate(-32deg)' : 'rotate(0deg)';
+
+      // Openings & Alert LED
+      els.openingsCount.textContent = String(state.touchlessOpenings);
+      els.overflowBanner.classList.toggle('hidden', !overflow);
+
+      if (overflow) {
+        els.ledIndicator.className = 'h-4 w-4 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.9)]';
+        els.ledStatusText.textContent = 'ON';
+        els.ledStatusText.className = 'text-2xl font-bold text-rose-400';
+      } else {
+        els.ledIndicator.className = 'h-4 w-4 rounded-full bg-slate-700 border border-slate-600';
+        els.ledStatusText.textContent = 'OFF';
+        els.ledStatusText.className = 'text-2xl font-bold text-slate-300';
+      }
+
+      els.autoModeBtn.textContent = 'Auto Telemetry: ' + (state.autoTelemetry ? 'ON' : 'OFF');
+    }
+
+    function appendTelemetryLog(note) {
+      const now = new Date().toLocaleTimeString();
+      const payload = {
+        lidOpen: state.lidOpen,
+        fillPercent: state.fillPercent,
+        overflowAlert: state.fillPercent >= 85,
+        touchlessOpenings: state.touchlessOpenings
+      };
+      const row = document.createElement('div');
+      row.className = 'flex items-start gap-2 border-b border-slate-900 pb-1';
+      row.innerHTML = `<span class="text-slate-500 shrink-0">[${now}]</span><span class="text-emerald-300 break-all">${JSON.stringify(payload)}</span>${note ? `<span class="text-sky-400 shrink-0">// ${note}</span>` : ''}`;
+      els.telemetryLog.prepend(row);
+      while (els.telemetryLog.children.length > 40) {
+        els.telemetryLog.removeChild(els.telemetryLog.lastChild);
+      }
+    }
+
+    function triggerHandDetected() {
+      if (!state.lidOpen) {
+        state.lidOpen = true;
+        state.touchlessOpenings += 1;
+      }
+      render();
+      appendTelemetryLog('Hand detected');
+
+      if (state.lidTimer) clearTimeout(state.lidTimer);
+      state.lidTimer = setTimeout(() => {
+        state.lidOpen = false;
+        render();
+        appendTelemetryLog('Lid auto-closed');
+      }, 3000);
+    }
+
+    function addWaste() {
+      state.fillPercent = Math.min(100, state.fillPercent + 15);
+      render();
+      appendTelemetryLog('Waste added');
+    }
+
+    function emptyBin() {
+      state.fillPercent = 0;
+      render();
+      appendTelemetryLog('Bin emptied');
+    }
+
+    function startTelemetryLoop() {
+      if (state.telemetryTimer) clearInterval(state.telemetryTimer);
+      state.telemetryTimer = setInterval(() => {
+        if (state.autoTelemetry) {
+          appendTelemetryLog('Periodic poll');
+        }
+      }, 2000);
+    }
+
+    els.handBtn.addEventListener('click', triggerHandDetected);
+    els.addWasteBtn.addEventListener('click', addWaste);
+    els.emptyBinBtn.addEventListener('click', emptyBin);
+    els.bannerEmptyBtn.addEventListener('click', emptyBin);
+    els.autoModeBtn.addEventListener('click', () => {
+      state.autoTelemetry = !state.autoTelemetry;
+      render();
+    });
+    els.clearLogBtn.addEventListener('click', () => {
+      els.telemetryLog.innerHTML = '';
+    });
+
+    render();
+    appendTelemetryLog('System initialized');
+    startTelemetryLoop();
+  </script>
+</body>
+</html>
